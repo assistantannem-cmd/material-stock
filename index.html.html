@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Material Stock Checker</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --border: #1e3a5f;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff3860;
+    --text: #e0f0ff;
+    --muted: #4a6a8a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Rajdhani', sans-serif; min-height: 100vh; }
+  body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 20%, rgba(0,212,255,0.07) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(255,107,53,0.05) 0%, transparent 50%); pointer-events: none; }
+  .grid-bg { position: fixed; inset: 0; background-image: linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; }
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; background: rgba(17,24,39,0.8); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100; }
+  .logo { width: 42px; height: 42px; background: linear-gradient(135deg, var(--accent), #0066cc); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 20px rgba(0,212,255,0.3); }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: 3px; color: var(--accent); text-shadow: 0 0 20px rgba(0,212,255,0.4); }
+  header p { font-size: 12px; color: var(--muted); letter-spacing: 1px; font-family: 'Share Tech Mono', monospace; }
+  .sync-status { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: 'Share Tech Mono', monospace; font-size: 12px; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .sync-dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  .sync-dot.error { background: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .stats-bar { display: flex; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .stat { flex: 1; padding: 12px 20px; border-right: 1px solid var(--border); text-align: center; }
+  .stat:last-child { border-right: none; }
+  .stat-num { font-size: 26px; font-weight: 700; color: var(--accent); font-family: 'Share Tech Mono', monospace; display: block; }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; }
+
+  .main { max-width: 960px; margin: 0 auto; padding: 28px 20px; }
+
+  /* Loading */
+  .loading-box { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 40px; text-align: center; margin-bottom: 28px; }
+  .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--muted); font-family: 'Share Tech Mono', monospace; font-size: 14px; }
+
+  .search-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 28px; position: relative; overflow: hidden; display: none; }
+  .search-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); }
+  .section-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; font-family: 'Share Tech Mono', monospace; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+  .tab { padding: 10px 22px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: 'Rajdhani', sans-serif; font-size: 15px; font-weight: 600; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; }
+  .tab.active { background: rgba(0,212,255,0.1); border-color: var(--accent); color: var(--accent); box-shadow: 0 0 15px rgba(0,212,255,0.15); }
+  .tab:hover:not(.active) { border-color: var(--muted); color: var(--text); }
+  .input-row { display: grid; gap: 14px; margin-bottom: 18px; }
+  .cuboid-inputs { grid-template-columns: 1fr 1fr 1fr; }
+  .cylinder-inputs { grid-template-columns: 1fr 1fr; }
+  .input-group { display: flex; flex-direction: column; gap: 7px; }
+  .input-group label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-family: 'Share Tech Mono', monospace; }
+  .input-group input { background: rgba(0,212,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 20px; outline: none; transition: all 0.2s; width: 100%; }
+  .input-group input:focus { border-color: var(--accent); background: rgba(0,212,255,0.08); box-shadow: 0 0 15px rgba(0,212,255,0.1); }
+  .input-group input::placeholder { color: var(--muted); font-size: 15px; }
+  .hint { font-size: 12px; color: var(--muted); font-family: 'Share Tech Mono', monospace; margin-bottom: 18px; line-height: 1.6; }
+  .hint span { color: var(--accent2); }
+  .search-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,212,255,0.05)); border: 1px solid var(--accent); border-radius: 10px; color: var(--accent); font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+  .search-btn:hover { background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(0,212,255,0.1)); box-shadow: 0 0 30px rgba(0,212,255,0.2); transform: translateY(-1px); }
+
+  .result-section { border-radius: 14px; border: 1px solid; margin-bottom: 20px; overflow: hidden; display: none; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .result-section.exact { border-color: var(--green); }
+  .result-section.bigger { border-color: var(--yellow); }
+  .result-section.nothing { border-color: var(--red); }
+  .result-header { padding: 18px 24px; display: flex; align-items: center; gap: 14px; }
+  .exact .result-header { background: rgba(0,255,136,0.08); }
+  .bigger .result-header { background: rgba(255,215,0,0.08); }
+  .nothing .result-header { background: rgba(255,56,96,0.08); }
+  .result-icon { font-size: 28px; }
+  .result-title { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
+  .exact .result-title { color: var(--green); }
+  .bigger .result-title { color: var(--yellow); }
+  .nothing .result-title { color: var(--red); }
+  .result-sub { font-size: 13px; color: var(--muted); font-family: 'Share Tech Mono', monospace; margin-top: 2px; }
+  .result-table { width: 100%; border-collapse: collapse; font-family: 'Share Tech Mono', monospace; }
+  .result-table th { padding: 10px 18px; text-align: left; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); }
+  .result-table td { padding: 12px 18px; border-top: 1px solid rgba(30,58,95,0.4); font-size: 14px; }
+  .result-table tr:hover td { background: rgba(0,212,255,0.04); }
+  .code-badge { display: inline-block; background: rgba(0,212,255,0.12); border: 1px solid rgba(0,212,255,0.3); color: var(--accent); border-radius: 6px; padding: 3px 10px; font-size: 13px; font-weight: 600; }
+  .mat-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; }
+  .mat-h13 { background: rgba(0,102,204,0.2); color: #66b3ff; border: 1px solid rgba(0,102,204,0.4); }
+  .mat-ms  { background: rgba(0,200,100,0.15); color: #66ffaa; border: 1px solid rgba(0,200,100,0.3); }
+  .mat-ds  { background: rgba(255,165,0,0.15); color: #ffcc66; border: 1px solid rgba(255,165,0,0.3); }
+  .dim-highlight { color: var(--accent2); font-weight: 700; }
+  .waste-good { color: var(--green); }
+  .waste-ok { color: var(--yellow); }
+  .waste-high { color: var(--red); }
+  .rank-badge { display: inline-block; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: 700; }
+  .rank-1 { background: rgba(0,255,136,0.2); color: var(--green); border: 1px solid var(--green); }
+  .rank-2 { background: rgba(255,215,0,0.2); color: var(--yellow); border: 1px solid var(--yellow); }
+  .rank-n { background: rgba(74,106,138,0.2); color: var(--muted); border: 1px solid var(--muted); }
+
+  .inventory-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin-top: 32px; display: none; }
+  .inventory-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .inventory-header h3 { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); font-family: 'Share Tech Mono', monospace; }
+  .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .filter-input { background: rgba(0,212,255,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 13px; outline: none; width: 180px; transition: all 0.2s; }
+  .filter-input:focus { border-color: var(--accent); }
+  .filter-input::placeholder { color: var(--muted); }
+  .filter-btn { padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: 'Rajdhani', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+  .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+  .table-wrap { overflow-x: auto; max-height: 380px; overflow-y: auto; }
+  .data-table { width: 100%; border-collapse: collapse; font-family: 'Share Tech Mono', monospace; font-size: 13px; }
+  .data-table th { position: sticky; top: 0; background: #0d1525; padding: 11px 16px; text-align: left; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); z-index: 1; }
+  .data-table td { padding: 10px 16px; border-bottom: 1px solid rgba(30,58,95,0.4); color: var(--text); }
+  .data-table tr:hover td { background: rgba(0,212,255,0.04); }
+  .shape-cyl { color: #ff9944; }
+  .shape-cub { color: #44bbff; }
+
+  .refresh-btn { padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent); background: rgba(0,212,255,0.08); color: var(--accent); font-family: 'Rajdhani', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.2s; letter-spacing: 1px; }
+  .refresh-btn:hover { background: rgba(0,212,255,0.15); }
+
+  @media (max-width: 600px) {
+    header { padding: 14px; flex-wrap: wrap; }
+    header h1 { font-size: 16px; }
+    .main { padding: 14px; }
+    .search-card { padding: 18px; }
+    .cuboid-inputs { grid-template-columns: 1fr 1fr; }
+    .stats-bar { flex-wrap: wrap; }
+    .stat { min-width: 50%; }
+    .sync-status { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<header>
+  <div class="logo">⚙️</div>
+  <div>
+    <h1>MATERIAL STOCK CHECKER</h1>
+    <p>LIVE — GOOGLE SHEET SE CONNECTED</p>
+  </div>
+  <div class="sync-status">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncText" style="color:var(--muted)">Connecting...</span>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat"><span class="stat-num" id="totalCount">—</span><span class="stat-label">Total Items</span></div>
+  <div class="stat"><span class="stat-num" id="cylinderCount">—</span><span class="stat-label">Cylinders</span></div>
+  <div class="stat"><span class="stat-num" id="cuboidCount">—</span><span class="stat-label">Cuboids</span></div>
+  <div class="stat"><span class="stat-num" id="matCount">—</span><span class="stat-label">Material Types</span></div>
+</div>
+
+<div class="main">
+
+  <!-- Loading -->
+  <div class="loading-box" id="loadingBox">
+    <div class="spinner"></div>
+    <div class="loading-text">Google Sheet se data load ho raha hai...</div>
+  </div>
+
+  <!-- Search Card -->
+  <div class="search-card" id="searchCard">
+    <div class="section-title">// Client Requirement Search</div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('cuboid')">📦 Cuboid / Block</button>
+      <button class="tab" onclick="switchTab('cylinder')">🔩 Cylinder / Rod</button>
+    </div>
+    <div id="cuboidForm">
+      <div class="input-row cuboid-inputs">
+        <div class="input-group"><label>Dimension 1 (mm)</label><input type="number" id="d1" placeholder="e.g. 200"></div>
+        <div class="input-group"><label>Dimension 2 (mm)</label><input type="number" id="d2" placeholder="e.g. 80"></div>
+        <div class="input-group"><label>Dimension 3 (mm)</label><input type="number" id="d3" placeholder="e.g. 150"></div>
+      </div>
+      <div class="hint">ℹ️ <span>Cuboid rotation automatically handle hoga</span> — 200×80×150 same hai 150×200×80 se.</div>
+    </div>
+    <div id="cylinderForm" style="display:none">
+      <div class="input-row cylinder-inputs">
+        <div class="input-group"><label>Diameter Φ (mm)</label><input type="number" id="cyPhi" placeholder="e.g. 80"></div>
+        <div class="input-group"><label>Height / Length (mm)</label><input type="number" id="cyH" placeholder="e.g. 200"></div>
+      </div>
+      <div class="hint">ℹ️ System exact match dhundega, phir <span>bade diameter aur height</span> wale pieces bhi dikhayega.</div>
+    </div>
+    <button class="search-btn" onclick="doSearch()">🔍 SEARCH STOCK</button>
+  </div>
+
+  <!-- Results -->
+  <div class="result-section exact" id="exactSection">
+    <div class="result-header"><div class="result-icon">✅</div><div><div class="result-title">EXACT MATCH FOUND</div><div class="result-sub" id="exactSub"></div></div></div>
+    <table class="result-table"><thead><tr><th>Code</th><th>Material</th><th>Shape</th><th>Dimensions (mm)</th><th>Weight (kg)</th></tr></thead><tbody id="exactRows"></tbody></table>
+  </div>
+
+  <div class="result-section bigger" id="biggerSection">
+    <div class="result-header"><div class="result-icon">📦</div><div><div class="result-title">AVAILABLE - CUT KARKE USE KAREN</div><div class="result-sub" id="biggerSub"></div></div></div>
+    <table class="result-table"><thead><tr><th>#</th><th>Code</th><th>Material</th><th>Stock Dimensions (mm)</th><th>Weight (kg)</th><th>Extra Material</th></tr></thead><tbody id="biggerRows"></tbody></table>
+  </div>
+
+  <div class="result-section nothing" id="nothingSection">
+    <div class="result-header"><div class="result-icon">❌</div><div><div class="result-title">STOCK AVAILABLE NAHI HAI</div><div class="result-sub" id="nothingSub"></div></div></div>
+  </div>
+
+  <!-- Full Inventory -->
+  <div class="inventory-card" id="inventoryCard">
+    <div class="inventory-header">
+      <h3>// Full Inventory (Live - Google Sheet)</h3>
+      <div class="filter-row">
+        <input type="text" class="filter-input" id="filterInput" placeholder="Search..." oninput="renderFullTable()">
+        <button class="filter-btn active" id="btnAll" onclick="filterShape('ALL')">All</button>
+        <button class="filter-btn" id="btnCub" onclick="filterShape('CUBOID')">Cuboid</button>
+        <button class="filter-btn" id="btnCyl" onclick="filterShape('CYLINDER')">Cylinder</button>
+        <button class="refresh-btn" onclick="loadData()">🔄 Refresh</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Code</th><th>Material</th><th>Shape</th><th>L/D1</th><th>B/D2</th><th>H/D3</th><th>Φ</th><th>Weight(kg)</th></tr></thead>
+        <tbody id="fullTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== GOOGLE SHEET ID =====
+const SHEET_ID = "1LhYqmJ_5pI9QdcM3hfOLPQXHOqf3FgMw70edcUizJwE";
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=Sheet1`;
+
+let inventory = [];
+let shapeFilter = "ALL";
+
+// ===== Load Data from Google Sheet =====
+async function loadData() {
+  try {
+    document.getElementById("syncDot").className = "sync-dot";
+    document.getElementById("syncText").textContent = "Loading...";
+    document.getElementById("syncText").style.color = "var(--muted)";
+
+    const res = await fetch(SHEET_URL, {redirect: "follow"});
+    const text = await res.text();
+
+    // Parse CSV
+    const lines = text.trim().split("\n");
+    const headers = lines[0].split(",").map(h => h.trim().toUpperCase().replace(/"/g,""));
+
+    const idx = (name) => headers.findIndex(h => h.includes(name));
+    const iCode  = idx("CODE");
+    const iMat   = idx("MATERIAL");
+    const iShape = idx("SHAPE");
+    const iL     = idx("LENGTH");
+    const iB     = idx("BREATH");
+    const iH     = idx("HEIGHT");
+    const iPhi   = idx("PHI");
+
+    inventory = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",").map(c => c.trim().replace(/"/g,""));
+      const code = cols[iCode];
+      if (!code || code === "") continue;
+
+      const getNum = (ix) => {
+        if (ix < 0 || !cols[ix] || cols[ix] === "") return null;
+        const n = parseFloat(cols[ix]);
+        return isNaN(n) ? null : n;
+      };
+
+      inventory.push({
+        code:  code,
+        mat:   cols[iMat] || "",
+        shape: (cols[iShape] || "").toUpperCase().trim(),
+        L:     getNum(iL),
+        B:     getNum(iB),
+        H:     getNum(iH),
+        phi:   getNum(iPhi),
+      });
+    }
+
+    // Update UI
+    document.getElementById("loadingBox").style.display = "none";
+    document.getElementById("searchCard").style.display = "block";
+    document.getElementById("inventoryCard").style.display = "block";
+    document.getElementById("syncDot").className = "sync-dot live";
+    document.getElementById("syncText").textContent = "Live ✓";
+    document.getElementById("syncText").style.color = "var(--green)";
+
+    updateStats();
+    renderFullTable();
+
+  } catch (err) {
+    document.getElementById("loadingBox").innerHTML = `
+      <div style="font-size:40px;margin-bottom:16px">⚠️</div>
+      <div class="loading-text" style="color:var(--red);margin-bottom:12px">Sheet load nahi ho saki!</div>
+      <div class="loading-text">Check karo: Sheet publicly shared hai? Internet hai?</div>
+      <button onclick="loadData()" class="refresh-btn" style="margin-top:16px">🔄 Retry</button>
+    `;
+    document.getElementById("syncDot").className = "sync-dot error";
+    document.getElementById("syncText").textContent = "Error";
+    document.getElementById("syncText").style.color = "var(--red)";
+    console.error(err);
+  }
+}
+
+function updateStats() {
+  document.getElementById("totalCount").textContent = inventory.length;
+  document.getElementById("cylinderCount").textContent = inventory.filter(i=>i.shape==="CYLINDER").length;
+  document.getElementById("cuboidCount").textContent = inventory.filter(i=>i.shape==="CUBOID").length;
+  document.getElementById("matCount").textContent = [...new Set(inventory.map(i=>i.mat))].length;
+}
+
+// ===== Helpers =====
+function getDensity(mat) {
+  if (mat.includes("H-13")) return 7.80;
+  if (mat.includes("D.S"))  return 7.70;
+  return 7.85;
+}
+function getWeight(item) {
+  const d = getDensity(item.mat);
+  let vol = item.shape === "CYLINDER"
+    ? Math.PI * Math.pow(item.phi/2, 2) * item.H
+    : item.L * item.B * item.H;
+  return (vol * d / 1000000).toFixed(2);
+}
+function getMatClass(mat) {
+  if (mat.includes("H-13")) return "mat-h13";
+  if (mat.includes("D.S"))  return "mat-ds";
+  return "mat-ms";
+}
+function sortedDims(a,b,c) { return [a,b,c].sort((x,y)=>x-y); }
+function cuboidFits(stock, req) {
+  const s = sortedDims(stock.L, stock.B, stock.H);
+  const r = sortedDims(req[0], req[1], req[2]);
+  return s[0]>=r[0] && s[1]>=r[1] && s[2]>=r[2];
+}
+function cuboidExact(stock, req) {
+  const s = sortedDims(stock.L, stock.B, stock.H);
+  const r = sortedDims(req[0], req[1], req[2]);
+  return s[0]===r[0] && s[1]===r[1] && s[2]===r[2];
+}
+function extraVol(stock, req) { return (stock.L*stock.B*stock.H) - (req[0]*req[1]*req[2]); }
+function extraVolCyl(stock, p, h) {
+  return Math.PI*Math.pow(stock.phi/2,2)*stock.H - Math.PI*Math.pow(p/2,2)*h;
+}
+
+// ===== Full Table =====
+function renderFullTable() {
+  const q = (document.getElementById("filterInput").value||"").toLowerCase();
+  const data = inventory.filter(i => {
+    const matchShape = shapeFilter==="ALL" || i.shape===shapeFilter;
+    const matchQ = i.mat.toLowerCase().includes(q) || String(i.code).includes(q) || i.shape.toLowerCase().includes(q);
+    return matchShape && matchQ;
+  });
+  document.getElementById("fullTableBody").innerHTML = data.map(item => `
+    <tr>
+      <td><span class="code-badge">${item.code}</span></td>
+      <td><span class="mat-badge ${getMatClass(item.mat)}">${item.mat}</span></td>
+      <td class="${item.shape==='CYLINDER'?'shape-cyl':'shape-cub'}">${item.shape}</td>
+      <td>${item.L??"-"}</td><td>${item.B??"-"}</td><td>${item.H??"-"}</td><td>${item.phi??"-"}</td>
+      <td>${getWeight(item)} kg</td>
+    </tr>`).join("");
+}
+function filterShape(s) {
+  shapeFilter = s;
+  document.getElementById("btnAll").classList.toggle("active", s==="ALL");
+  document.getElementById("btnCub").classList.toggle("active", s==="CUBOID");
+  document.getElementById("btnCyl").classList.toggle("active", s==="CYLINDER");
+  renderFullTable();
+}
+
+// ===== Tab Switch =====
+let activeTab = "cuboid";
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll(".tab").forEach((t,i) => {
+    t.classList.toggle("active", (i===0&&tab==="cuboid")||(i===1&&tab==="cylinder"));
+  });
+  document.getElementById("cuboidForm").style.display   = tab==="cuboid"?"block":"none";
+  document.getElementById("cylinderForm").style.display = tab==="cylinder"?"block":"none";
+  hideResults();
+}
+function hideResults() {
+  ["exactSection","biggerSection","nothingSection"].forEach(id=>{
+    document.getElementById(id).style.display="none";
+  });
+}
+
+// ===== Main Search =====
+function doSearch() {
+  hideResults();
+  if (activeTab === "cuboid") {
+    const d1=parseFloat(document.getElementById("d1").value);
+    const d2=parseFloat(document.getElementById("d2").value);
+    const d3=parseFloat(document.getElementById("d3").value);
+    if (!d1||!d2||!d3) { alert("Teeno dimensions daalo!"); return; }
+    const req=[d1,d2,d3];
+    const reqVol=d1*d2*d3;
+    const reqStr=`${d1} × ${d2} × ${d3} mm`;
+    const cuboids=inventory.filter(i=>i.shape==="CUBOID");
+    const exact=cuboids.filter(i=>cuboidExact(i,req));
+    const bigger=cuboids.filter(i=>!cuboidExact(i,req)&&cuboidFits(i,req)).sort((a,b)=>extraVol(a,req)-extraVol(b,req));
+
+    if (exact.length>0) {
+      document.getElementById("exactSub").textContent=`${exact.length} item(s) mila — ${reqStr}`;
+      document.getElementById("exactRows").innerHTML=exact.map(item=>`
+        <tr><td><span class="code-badge">${item.code}</span></td>
+        <td><span class="mat-badge ${getMatClass(item.mat)}">${item.mat}</span></td>
+        <td class="shape-cub">CUBOID</td>
+        <td class="dim-highlight">${item.L} × ${item.B} × ${item.H}</td>
+        <td>${getWeight(item)} kg</td></tr>`).join("");
+      document.getElementById("exactSection").style.display="block";
+    }
+    if (bigger.length>0) {
+      document.getElementById("biggerSub").textContent=`${bigger.length} piece(s) — sorted by least wastage`;
+      document.getElementById("biggerRows").innerHTML=bigger.map((item,i)=>{
+        const extra=extraVol(item,req);
+        const pct=((extra/reqVol)*100).toFixed(0);
+        const wc=pct<30?"waste-good":pct<80?"waste-ok":"waste-high";
+        const rc=i===0?"rank-1":i===1?"rank-2":"rank-n";
+        return `<tr><td><span class="rank-badge ${rc}">${i+1}</span></td>
+          <td><span class="code-badge">${item.code}</span></td>
+          <td><span class="mat-badge ${getMatClass(item.mat)}">${item.mat}</span></td>
+          <td class="dim-cell">${item.L} × ${item.B} × ${item.H}</td>
+          <td>${getWeight(item)} kg</td>
+          <td class="${wc}">+${(extra/1000).toFixed(0)} cm³ (${pct}% extra)</td></tr>`;
+      }).join("");
+      document.getElementById("biggerSection").style.display="block";
+    }
+    if (exact.length===0&&bigger.length===0) {
+      document.getElementById("nothingSub").textContent=`Koi bhi piece available nahi: ${reqStr}`;
+      document.getElementById("nothingSection").style.display="block";
+    }
+  } else {
+    const reqPhi=parseFloat(document.getElementById("cyPhi").value);
+    const reqH=parseFloat(document.getElementById("cyH").value);
+    if (!reqPhi||!reqH) { alert("Diameter aur Height daalo!"); return; }
+    const reqStr=`Φ${reqPhi} × H${reqH} mm`;
+    const cyls=inventory.filter(i=>i.shape==="CYLINDER");
+    const exact=cyls.filter(i=>i.phi===reqPhi&&i.H===reqH);
+    const bigger=cyls.filter(i=>!(i.phi===reqPhi&&i.H===reqH)&&i.phi>=reqPhi&&i.H>=reqH).sort((a,b)=>extraVolCyl(a,reqPhi,reqH)-extraVolCyl(b,reqPhi,reqH));
+    const reqVol=Math.PI*Math.pow(reqPhi/2,2)*reqH;
+
+    if (exact.length>0) {
+      document.getElementById("exactSub").textContent=`${exact.length} item(s) mila — ${reqStr}`;
+      document.getElementById("exactRows").innerHTML=exact.map(item=>`
+        <tr><td><span class="code-badge">${item.code}</span></td>
+        <td><span class="mat-badge ${getMatClass(item.mat)}">${item.mat}</span></td>
+        <td class="shape-cyl">CYLINDER</td>
+        <td class="dim-highlight">Φ${item.phi} × H${item.H}</td>
+        <td>${getWeight(item)} kg</td></tr>`).join("");
+      document.getElementById("exactSection").style.display="block";
+    }
+    if (bigger.length>0) {
+      document.getElementById("biggerSub").textContent=`${bigger.length} piece(s) — sorted by least wastage`;
+      document.getElementById("biggerRows").innerHTML=bigger.map((item,i)=>{
+        const extra=extraVolCyl(item,reqPhi,reqH);
+        const pct=((extra/reqVol)*100).toFixed(0);
+        const wc=pct<30?"waste-good":pct<80?"waste-ok":"waste-high";
+        const rc=i===0?"rank-1":i===1?"rank-2":"rank-n";
+        return `<tr><td><span class="rank-badge ${rc}">${i+1}</span></td>
+          <td><span class="code-badge">${item.code}</span></td>
+          <td><span class="mat-badge ${getMatClass(item.mat)}">${item.mat}</span></td>
+          <td class="dim-cell">Φ${item.phi} × H${item.H}</td>
+          <td>${getWeight(item)} kg</td>
+          <td class="${wc}">+${(extra/1000).toFixed(0)} cm³ (${pct}% extra)</td></tr>`;
+      }).join("");
+      document.getElementById("biggerSection").style.display="block";
+    }
+    if (exact.length===0&&bigger.length===0) {
+      document.getElementById("nothingSub").textContent=`Koi bhi piece available nahi: ${reqStr}`;
+      document.getElementById("nothingSection").style.display="block";
+    }
+  }
+}
+
+document.addEventListener("keydown", e => { if(e.key==="Enter") doSearch(); });
+
+// Load on start
+loadData();
+</script>
+</body>
+</html>
